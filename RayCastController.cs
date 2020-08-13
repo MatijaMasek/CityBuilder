@@ -3,34 +3,23 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using System.Collections.Generic;
+using System.Threading;
 
 public class RayCastController : MonoBehaviour
 {
+
+    #region Declared variables
+
+    #region Serializables
+
+    //Notes: 0 small farm, 1 regular farm, 2 big farm, 3 small house, 4 regular house, 5 big house, 6 small market, 7 regular market, 8 big market
+
     [Header("Buildings")]
-    [SerializeField] GameObject SmallFarm;
-    [SerializeField] GameObject RegularFarm;
-    [SerializeField] GameObject BigFarm;
-
-    [SerializeField] GameObject SmallHouse;
-    [SerializeField] GameObject RegularHouse;
-    [SerializeField] GameObject BigHouse;
-
-    [SerializeField] GameObject SmallMarket;
-    [SerializeField] GameObject RegularMarket;
-    [SerializeField] GameObject BigMarket;
+    [SerializeField] GameObject[] Buildings;
 
     [Header("Cursors")]
-    [SerializeField] GameObject cursorSmallFarmPrefab;
-    [SerializeField] GameObject cursorRegularFarmPrefab;
-    [SerializeField] GameObject cursorBigFarmPrefab;
-
-    [SerializeField] GameObject cursorSmallHousePrefab;
-    [SerializeField] GameObject cursorRegularHousePrefab;
-    [SerializeField] GameObject cursorBigHousePrefab;
-
-    [SerializeField] GameObject cursorSmallMarketPrefab;
-    [SerializeField] GameObject cursorRegularMarketPrefab;
-    [SerializeField] GameObject cursorBigMarketPrefab;
+    [SerializeField] GameObject[] CursorPrefabs;
+    [SerializeField] private LayerMask EverythingLayerMask;
 
     [Header("Trees")]
     [SerializeField] GameObject treePrefab;
@@ -39,60 +28,65 @@ public class RayCastController : MonoBehaviour
     [Header("Map")]
     [SerializeField] GameObject map;
     [SerializeField] [Range(50, 1000)] int mapSize = 50;
-    private float cornerPosition = 0;
 
     [Header("Audio")]
     [SerializeField] AudioSource audioSource;
     [SerializeField] AudioClip buildAudioClip;
     [SerializeField] AudioClip cutTreeAudioClip;
-
     [SerializeField] [Range(0f, 1f)] float VolumeSFX;
 
+    [Header("Inventory")]
     [SerializeField] Inventory inventory;
 
+    [Header("Debugging")]
     [SerializeField] private bool ShowRaycasts = false;
 
-    GameObject cursorSmallFarm;
-    GameObject cursorRegularFarm;
-    GameObject cursorBigFarm;
+    #endregion
 
-    GameObject cursorSmallHouse;
-    GameObject cursorRegularHouse;
-    GameObject cursorBigHouse;
+    #region Privates
 
-    GameObject cursorSmallMarket;
-    GameObject cursorRegularMarket;
-    GameObject cursorBigMarket;
-
-    private Collider SmallFarmCursorCollider;
-    private Collider RegularFarmCursorCollider;
-    private Collider BigFarmCursorCollider;
-
-    private Collider SmallHouseCursorCollider;
-    private Collider RegularHouseCursorCollider;
-    private Collider BigHouseCursorCollider;
-
-    private Collider SmallMarketCursorCollider;
-    private Collider RegularMarketCursorCollider;
-    private Collider BigMarketCursorCollider;
-
+    //Main
+    private GameObject[] cursors;
+    private Collider[] cursorColliders;
     private List<Collider> AllColliders = new List<Collider>();
 
+    //Cursor position
     int LastPosX, LastPosZ;
-
     Vector3 mousePos;
+    Quaternion rotate90 = Quaternion.Euler(0f, 90f, 0f);
 
-    [SerializeField] private LayerMask EverythingLayerMask;
+    //Map
+    private float cornerPosition = 0;
+
+    #endregion
+
+    #region Constants
+
+    //Constants
+    private string TREE = "Tree";
+    private string GROUND = "Ground";
+
+    #endregion
+
+    #region Enumerators
 
     actionModes actionMode = actionModes.nothing;
 
-    public enum actionModes{ nothing, cutTrees, smallHouse, regularHouse, bigHouse, smallFarm, regularFarm, bigFarm, smallMarket, regularMarket, bigMarket}
+    public enum actionModes {
+        nothing = -2, cutTrees = -1, smallFarm = 0, regularFarm = 1, bigFarm = 2, smallHouse = 3, regularHouse = 4, bigHouse = 5, smallMarket = 6, regularMarket = 7, bigMarket = 8
+    }
+
+    #endregion
+
+    #endregion
+
+    #region Start and initialization
 
     void Start()
     {
-        map.transform.localScale = new Vector3(mapSize, 1, mapSize);
+        Physics.autoSyncTransforms = true; //Tells Unity to update colliders real time
 
-        Physics.autoSyncTransforms = true;
+        map.transform.localScale = new Vector3(mapSize, 1, mapSize);
 
         audioSource = GetComponent<AudioSource>();
 
@@ -100,36 +94,14 @@ public class RayCastController : MonoBehaviour
 
         GenerateTrees();
 
-        SetUpCursor(ref cursorSmallFarm, cursorSmallFarmPrefab);
-        SmallFarmCursorCollider = cursorSmallFarm.GetComponent<Collider>();
+        cursors = new GameObject[Buildings.Length];
 
-        SetUpCursor(ref cursorRegularFarm, cursorRegularFarmPrefab);
-        RegularFarmCursorCollider = cursorRegularFarm.GetComponent<Collider>();
+        cursorColliders = new Collider[Buildings.Length];
 
-        SetUpCursor(ref cursorBigFarm, cursorBigFarmPrefab);
-        BigFarmCursorCollider = cursorBigFarm.GetComponent<Collider>();
-
-
-        SetUpCursor(ref cursorSmallHouse, cursorSmallHousePrefab);
-        SmallHouseCursorCollider = cursorSmallHouse.GetComponent<Collider>();
-
-        SetUpCursor(ref cursorRegularHouse, cursorRegularHousePrefab);
-        RegularHouseCursorCollider = cursorRegularHouse.GetComponent<Collider>();
-
-        SetUpCursor(ref cursorBigHouse, cursorBigHousePrefab);
-        BigHouseCursorCollider = cursorBigHouse.GetComponent<Collider>();
-
-
-        SetUpCursor(ref cursorSmallMarket, cursorSmallMarketPrefab);
-        SmallMarketCursorCollider = cursorSmallMarket.GetComponent<Collider>();
-
-        SetUpCursor(ref cursorRegularMarket, cursorRegularMarketPrefab);
-        RegularMarketCursorCollider = cursorRegularMarket.GetComponent<Collider>();
-
-        SetUpCursor(ref cursorBigMarket, cursorBigMarketPrefab);
-        BigMarketCursorCollider = cursorBigMarket.GetComponent<Collider>();
-
-
+        for (int i = 0; i < cursors.Length; i++) {
+            SetupTheCursor(ref cursors[i], CursorPrefabs[i], ref cursorColliders[i]);
+        }
+        
     }
 
     void GenerateTrees()
@@ -152,6 +124,11 @@ public class RayCastController : MonoBehaviour
         }
     }
 
+    private void SetupTheCursor(ref GameObject cursor, GameObject prefab, ref Collider collider) {
+        SetUpCursor(ref cursor, prefab);
+        collider = cursor.GetComponent<Collider>();
+    }
+
     Vector3 getRandomPosition()
     {
         float x = Random.Range(-cornerPosition, cornerPosition);
@@ -168,73 +145,73 @@ public class RayCastController : MonoBehaviour
         cursor.SetActive(false);
     }
 
-    private void BuildCursorLocation(RaycastHit Hit, Transform CursorTransform)
-    {
+    #endregion
 
-        int PosX = (int)Mathf.Round(Hit.point.x);
-        int PosZ = (int)Mathf.Round(Hit.point.z);
+    #region Update
 
-        if (PosX != LastPosX || PosZ != LastPosZ)
-        {
+    void Update() {
 
-            LastPosX = PosX;
-            LastPosZ = PosZ;
+        mousePos = Input.mousePosition;
+        Ray ray = Camera.main.ScreenPointToRay(mousePos);
 
-            CursorTransform.position= new Vector3(PosX, 0, PosZ);
-
+        if (EventSystem.current.IsPointerOverGameObject()) {
+            return;
         }
 
-        if(Input.GetKeyDown(KeyCode.R))
-        {
-            CursorTransform.rotation *= Quaternion.Euler(0f, 90f, 0f);
-        }
+        BuildSetting(actionMode);
 
-    }
-
-    void VisibleBuildings(bool smallHouseVisible, bool regularHouseVisible, bool bigHouseVisible, bool smallFarmVisible, bool regularFarmVisible, bool bigFarmVisible, bool smallMarketVisible, bool regularMarketVisible, bool bigMarketVisible)
-    {
-
-        cursorSmallHouse.SetActive(smallHouseVisible);
-        cursorRegularHouse.SetActive(regularHouseVisible);
-        cursorBigHouse.SetActive(bigHouseVisible);
-
-        cursorSmallFarm.SetActive(smallFarmVisible);
-        cursorRegularFarm.SetActive(regularFarmVisible);
-        cursorBigFarm.SetActive(bigFarmVisible);
-
-        cursorSmallMarket.SetActive(smallMarketVisible);
-        cursorRegularMarket.SetActive(regularMarketVisible);
-        cursorBigMarket.SetActive(bigMarketVisible);
-    }
-
-    void BuildSetting(actionModes buildSetting)
-    {
-        switch (buildSetting)
-        {
+        switch (actionMode) {
             case actionModes.nothing:
-                VisibleBuildings(false, false, false, false, false, false, false, false, false);
                 break;
+            case actionModes.cutTrees:
+                cutTrees(ray);
+                break;
+
+            default:
+                int ActionMode = (int)actionMode;
+                BuildStructure(ray, cursors[ActionMode].transform, cursorColliders[ActionMode], Buildings[ActionMode]);
+                break;
+
+        }
+    }
+
+    void BuildSetting(actionModes buildSetting) {
+        switch (buildSetting) {
+            case actionModes.nothing:
             case actionModes.cutTrees:
                 VisibleBuildings(false, false, false, false, false, false, false, false, false);
                 break;
-            case actionModes.smallHouse:
+
+            #region Farms
+
+            case actionModes.smallFarm:
                 VisibleBuildings(true, false, false, false, false, false, false, false, false);
                 break;
-            case actionModes.regularHouse:
+            case actionModes.regularFarm:
                 VisibleBuildings(false, true, false, false, false, false, false, false, false);
                 break;
-            case actionModes.bigHouse:
+            case actionModes.bigFarm:
                 VisibleBuildings(false, false, true, false, false, false, false, false, false);
                 break;
-            case actionModes.smallFarm:
+
+            #endregion
+
+            #region Houses
+
+            case actionModes.smallHouse:
                 VisibleBuildings(false, false, false, true, false, false, false, false, false);
                 break;
-            case actionModes.regularFarm:
+            case actionModes.regularHouse:
                 VisibleBuildings(false, false, false, false, true, false, false, false, false);
                 break;
-            case actionModes.bigFarm:
+            case actionModes.bigHouse:
                 VisibleBuildings(false, false, false, false, false, true, false, false, false);
                 break;
+
+            #endregion
+
+            #region Markets
+
             case actionModes.smallMarket:
                 VisibleBuildings(false, false, false, false, false, false, true, false, false);
                 break;
@@ -244,20 +221,133 @@ public class RayCastController : MonoBehaviour
             case actionModes.bigMarket:
                 VisibleBuildings(false, false, false, false, false, false, false, false, true);
                 break;
+
+            #endregion
+
             default:
                 break;
+
         }
     }
 
-    private Collider BuildBuilding(GameObject Structure, Transform CursorTransform)
-    {
+    void VisibleBuildings(bool smallFarmVisible, bool regularFarmVisible, bool bigFarmVisible, bool smallHouseVisible, bool regularHouseVisible, bool bigHouseVisible, bool smallMarketVisible, bool regularMarketVisible, bool bigMarketVisible) {
+
+        cursors[0].SetActive(smallFarmVisible);
+        cursors[1].SetActive(regularFarmVisible);
+        cursors[2].SetActive(bigFarmVisible);
+        cursors[3].SetActive(smallHouseVisible);
+        cursors[4].SetActive(regularHouseVisible);
+        cursors[5].SetActive(bigHouseVisible);
+        cursors[6].SetActive(smallMarketVisible);
+        cursors[7].SetActive(regularMarketVisible);
+        cursors[8].SetActive(bigMarketVisible);
+
+    }
+
+    #region Collection trees
+
+    //Collection Trees
+
+    void cutTrees(Ray ray) {
+        RaycastHit[] Hits = PublicStatics.RaycastAll(ray, float.MaxValue, Color.green, 1f, EverythingLayerMask, ShowRaycasts);
+
+        if (Hits.Length > 0) {
+            for (int i = 0; i < Hits.Length; i++) {
+                if (Hits[i].transform.CompareTag(TREE)) {
+                    if (MouseDown()) {
+                        audioSource.PlayOneShot(cutTreeAudioClip, VolumeSFX);
+                        inventory.tree += 1;
+                        AllColliders.Remove(Hits[i].transform.gameObject.GetComponent<Collider>());
+                        Destroy(Hits[i].transform.gameObject);
+                    }
+
+                }
+            }
+        }
+    }
+
+    #endregion
+
+    #region Build a structure
+
+    void BuildStructure(Ray ray, Transform cursorTransform, Collider cursorCollider, GameObject building) {
+
+        RaycastHit[] Hits = PublicStatics.RaycastAll(ray, float.MaxValue, Color.green, 1f, EverythingLayerMask, ShowRaycasts);
+
+        if (Hits.Length > 0) {
+            for (int i = 0; i < Hits.Length; i++) {
+                if (Hits[i].transform.CompareTag(GROUND)) {
+
+                    BuildCursorLocation(Hits[i], cursorTransform);
+
+                    if (MouseDown()) {
+
+                        if (EmptySpace(cursorCollider)) {
+
+                            AllColliders.Add(BuildBuilding(building, cursorTransform));
+                            audioSource.PlayOneShot(buildAudioClip, VolumeSFX);
+
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    private void BuildCursorLocation(RaycastHit Hit, Transform CursorTransform) {
+
+        int PosX = (int)Mathf.Round(Hit.point.x);
+        int PosZ = (int)Mathf.Round(Hit.point.z);
+
+        if (PosX != LastPosX || PosZ != LastPosZ) {
+
+            LastPosX = PosX;
+            LastPosZ = PosZ;
+
+            CursorTransform.position = new Vector3(PosX, 0, PosZ);
+
+        }
+
+        if (Input.GetKeyDown(KeyCode.R)) {
+            CursorTransform.rotation *= rotate90;
+        }
+
+    }
+
+    private bool EmptySpace(Collider TheCollider) {
+
+        int ColliderCount = AllColliders.Count;
+
+        if (ColliderCount > 0) {
+
+            for (int i = 0; i < ColliderCount; i++) {
+
+                if (TheCollider.bounds.Intersects(AllColliders[i].bounds)) {
+
+                    return false;
+
+                }
+
+            }
+
+        }
+
+        return true;
+
+    }
+
+    private Collider BuildBuilding(GameObject Structure, Transform CursorTransform) {
 
         GameObject Building = Instantiate(Structure, transform);
         Building.transform.position = CursorTransform.position;
         Building.transform.rotation = CursorTransform.rotation;
 
-        switch (actionMode)
-        {          
+        //Inventory editing, bonuses, and costs
+        switch (actionMode) {
+
+            #region Farms
+
             case actionModes.smallFarm:
                 inventory.food += 1;
                 inventory.tree -= 1;
@@ -273,6 +363,9 @@ public class RayCastController : MonoBehaviour
                 inventory.tree -= 4;
                 break;
 
+            #endregion
+
+            #region Houses
 
             case actionModes.smallHouse:
                 inventory.food -= 1;
@@ -292,6 +385,9 @@ public class RayCastController : MonoBehaviour
                 inventory.workers += 4;
                 break;
 
+            #endregion
+
+            #region Markets
 
             case actionModes.smallMarket:
                 inventory.food -= 1;
@@ -311,7 +407,7 @@ public class RayCastController : MonoBehaviour
                 inventory.workers -= 4;
                 break;
 
-
+                #endregion
 
         }
 
@@ -319,406 +415,20 @@ public class RayCastController : MonoBehaviour
 
     }
 
-    private bool EmptySpace(Collider TheCollider)
-    {
+    #endregion
 
-        int ColliderCount = AllColliders.Count;
+    #endregion
 
-        if (ColliderCount > 0)
-        {
-            
-            for (int i = 0; i < ColliderCount; i++)
-            {
+    #region Mouse input
 
-                if (TheCollider.bounds.Intersects(AllColliders[i].bounds))
-                {
-
-                    return false;
-
-                }
-
-            }
-
-        }
-
-        return true;
-
+    private bool MouseDown() {
+        return Input.GetMouseButtonDown(0);
     }
 
-    void Update()
-    {
-        
-        mousePos = Input.mousePosition;
-        Ray ray = Camera.main.ScreenPointToRay(mousePos);
+    #endregion
 
-        if (EventSystem.current.IsPointerOverGameObject())
-        {
-            return;
-        }
+    #region UI buttons
 
-        BuildSetting(actionMode);
-
-        switch (actionMode)
-        {
-            case actionModes.cutTrees:
-                cutTrees(ray);
-                break;
-
-            case actionModes.smallFarm:
-                smallFarm(ray);
-                break;
-
-            case actionModes.regularFarm:
-                regularFarm(ray);
-                break;
-
-            case actionModes.bigFarm:
-                bigFarm(ray);
-                break;
-
-            
-            case actionModes.smallHouse:
-                smallHouse(ray);
-                break;
-
-            case actionModes.regularHouse:
-                regularHouse(ray);
-                break;
-
-            case actionModes.bigHouse:
-                bigHouse(ray);
-                break;
-
-
-            case actionModes.smallMarket:
-                smallMarket(ray);
-                break;
-
-            case actionModes.regularMarket:
-                regularMarket(ray);
-                break;
-
-            case actionModes.bigMarket:
-                bigMarket(ray);
-                break;
-
-            default:
-                break;
-        }            
-    }
-
-    //Collection Trees
-
-    void cutTrees(Ray ray)
-    {
-        RaycastHit[] Hits = PublicStatics.RaycastAll(ray, float.MaxValue, Color.green, 1f, EverythingLayerMask, ShowRaycasts);
-
-        if (Hits.Length > 0)
-        {
-            for (int i = 0; i < Hits.Length; i++)
-            {
-                if (Hits[i].transform.CompareTag("Tree"))
-                {
-                    if (Input.GetMouseButtonDown(0))
-                    {
-                        audioSource.PlayOneShot(cutTreeAudioClip, VolumeSFX);
-                        inventory.tree += 1;
-                        AllColliders.Remove(Hits[i].transform.gameObject.GetComponent<Collider>());
-                        Destroy(Hits[i].transform.gameObject);
-                    }
-                        
-                }
-            }
-        }
-    }
-
-    //Farms
-
-    //Building Small farm
-    void smallFarm(Ray ray)
-    {
-
-        RaycastHit[] Hits = PublicStatics.RaycastAll(ray, float.MaxValue, Color.green, 1f, EverythingLayerMask, ShowRaycasts);
-
-        if (Hits.Length > 0) {
-            for (int i = 0; i < Hits.Length; i++) {
-                if (Hits[i].transform.CompareTag("Ground")) {
-
-                    BuildCursorLocation(Hits[i], cursorSmallFarm.transform);
-
-                    if (Input.GetMouseButtonDown(0)) {
-
-                        if (EmptySpace(SmallFarmCursorCollider)) 
-                        {
-
-                            AllColliders.Add(BuildBuilding(SmallFarm, cursorSmallFarm.transform));
-                            audioSource.PlayOneShot(buildAudioClip, VolumeSFX);
-
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    //Building Regular Farm
-
-    void regularFarm(Ray ray)
-    {
-
-        RaycastHit[] Hits = PublicStatics.RaycastAll(ray, float.MaxValue, Color.green, 1f, EverythingLayerMask, ShowRaycasts);
-
-        if (Hits.Length > 0)
-        {
-            for (int i = 0; i < Hits.Length; i++)
-            {
-                if (Hits[i].transform.CompareTag("Ground"))
-                {
-
-                    BuildCursorLocation(Hits[i], cursorRegularFarm.transform);
-
-                    if (Input.GetMouseButtonDown(0))
-                    {
-
-                        if (EmptySpace(RegularFarmCursorCollider))
-                        {
-
-                            AllColliders.Add(BuildBuilding(RegularFarm, cursorRegularFarm.transform));
-                            audioSource.PlayOneShot(buildAudioClip, VolumeSFX);
-                        }
-                    }
-                    break;
-                }
-            }
-        }               
-    }
-
-    //Building Big Farm
-    void bigFarm(Ray ray)
-    {
-
-        RaycastHit[] Hits = PublicStatics.RaycastAll(ray, float.MaxValue, Color.green, 1f, EverythingLayerMask, ShowRaycasts);
-
-        if (Hits.Length > 0)
-        {
-            for (int i = 0; i < Hits.Length; i++)
-            {
-                if (Hits[i].transform.CompareTag("Ground"))
-                {
-
-                    BuildCursorLocation(Hits[i], cursorBigFarm.transform);
-
-                    if (Input.GetMouseButtonDown(0))
-                    {
-
-                        if (EmptySpace(BigFarmCursorCollider))
-                        {
-
-                            AllColliders.Add(BuildBuilding(BigFarm, cursorBigFarm.transform));
-                            audioSource.PlayOneShot(buildAudioClip, VolumeSFX);
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    //Houses
-
-    //Building Small House
-    void smallHouse(Ray ray)
-    {
-
-        RaycastHit[] Hits = PublicStatics.RaycastAll(ray, float.MaxValue, Color.green, 1f, EverythingLayerMask, ShowRaycasts);
-
-        if (Hits.Length > 0)
-        {
-            for (int i = 0; i < Hits.Length; i++)
-            {
-                if (Hits[i].transform.CompareTag("Ground"))
-                {
-
-                    BuildCursorLocation(Hits[i], cursorSmallHouse.transform);
-
-                    if (Input.GetMouseButtonDown(0))
-                    {
-
-                        if (EmptySpace(SmallHouseCursorCollider))
-                        {
-
-                            AllColliders.Add(BuildBuilding(SmallHouse, cursorSmallHouse.transform));
-                            audioSource.PlayOneShot(buildAudioClip, VolumeSFX);
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    //Building Regular House
-    void regularHouse(Ray ray)
-    {
-
-        RaycastHit[] Hits = PublicStatics.RaycastAll(ray, float.MaxValue, Color.green, 1f, EverythingLayerMask, ShowRaycasts);
-
-        if (Hits.Length > 0)
-        {
-            for (int i = 0; i < Hits.Length; i++)
-            {
-                if (Hits[i].transform.CompareTag("Ground"))
-                {
-
-                    BuildCursorLocation(Hits[i], cursorRegularHouse.transform);
-
-                    if (Input.GetMouseButtonDown(0))
-                    {
-
-                        if (EmptySpace(RegularHouseCursorCollider))
-                        {
-
-                            AllColliders.Add(BuildBuilding(RegularHouse, cursorRegularHouse.transform));
-                            audioSource.PlayOneShot(buildAudioClip, VolumeSFX);
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    //Building Big House
-    void bigHouse(Ray ray)
-    {
-
-        RaycastHit[] Hits = PublicStatics.RaycastAll(ray, float.MaxValue, Color.green, 1f, EverythingLayerMask, ShowRaycasts);
-
-        if (Hits.Length > 0)
-        {
-            for (int i = 0; i < Hits.Length; i++)
-            {
-                if (Hits[i].transform.CompareTag("Ground"))
-                {
-
-                    BuildCursorLocation(Hits[i], cursorBigHouse.transform);
-
-                    if (Input.GetMouseButtonDown(0))
-                    {
-
-                        if (EmptySpace(BigHouseCursorCollider))
-                        {
-
-                            AllColliders.Add(BuildBuilding(BigHouse, cursorBigHouse.transform));
-                            audioSource.PlayOneShot(buildAudioClip, VolumeSFX);
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    //Markets
-
-    //Building Small Market
-    void smallMarket(Ray ray)
-    {
-
-        RaycastHit[] Hits = PublicStatics.RaycastAll(ray, float.MaxValue, Color.green, 1f, EverythingLayerMask, ShowRaycasts);
-
-        if (Hits.Length > 0)
-        {
-            for (int i = 0; i < Hits.Length; i++)
-            {
-                if (Hits[i].transform.CompareTag("Ground"))
-                {
-
-                    BuildCursorLocation(Hits[i], cursorSmallMarket.transform);
-
-                    if (Input.GetMouseButtonDown(0))
-                    {
-
-                        if (EmptySpace(SmallMarketCursorCollider))
-                        {
-
-                            AllColliders.Add(BuildBuilding(SmallMarket, cursorSmallMarket.transform));
-                            audioSource.PlayOneShot(buildAudioClip, VolumeSFX);
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    //Building Regular Market
-    void regularMarket(Ray ray)
-    {
-
-
-        RaycastHit[] Hits = PublicStatics.RaycastAll(ray, float.MaxValue, Color.green, 1f, EverythingLayerMask, ShowRaycasts);
-
-        if (Hits.Length > 0)
-        {
-            for (int i = 0; i < Hits.Length; i++)
-            {
-                if (Hits[i].transform.CompareTag("Ground"))
-                {
-
-                    BuildCursorLocation(Hits[i], cursorRegularMarket.transform);
-
-                    if (Input.GetMouseButtonDown(0))
-                    {
-
-                        if (EmptySpace(RegularMarketCursorCollider))
-                        {
-
-                            AllColliders.Add(BuildBuilding(RegularMarket, cursorRegularMarket.transform));
-                            audioSource.PlayOneShot(buildAudioClip, VolumeSFX);
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    //Building Big Market
-    void bigMarket(Ray ray)
-    {
-
-
-        RaycastHit[] Hits = PublicStatics.RaycastAll(ray, float.MaxValue, Color.green, 1f, EverythingLayerMask, ShowRaycasts);
-
-        if (Hits.Length > 0)
-        {
-            for (int i = 0; i < Hits.Length; i++)
-            {
-                if (Hits[i].transform.CompareTag("Ground"))
-                {
-
-                    BuildCursorLocation(Hits[i], cursorBigMarket.transform);
-
-                    if (Input.GetMouseButtonDown(0))
-                    {
-
-                        if (EmptySpace(BigMarketCursorCollider))
-                        {
-
-                            AllColliders.Add(BuildBuilding(BigMarket, cursorBigMarket.transform));
-                            audioSource.PlayOneShot(buildAudioClip, VolumeSFX);
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    
-    
     //UI Buttons
 
     //Cutting Trees
@@ -726,6 +436,8 @@ public class RayCastController : MonoBehaviour
     {
         actionMode = actionModes.cutTrees;
     }
+
+    #region Farms
 
     //Farms
     public void BuildSmallFarm()
@@ -743,6 +455,10 @@ public class RayCastController : MonoBehaviour
         actionMode = actionModes.bigFarm;    
     }
 
+    #endregion
+
+    #region Houses
+
     //Houses
     public void BuildSmallHouse()
     {
@@ -758,6 +474,10 @@ public class RayCastController : MonoBehaviour
     {
         actionMode = actionModes.bigHouse;    
     }
+
+    #endregion
+
+    #region Markets
 
     //Markets
 
@@ -775,5 +495,9 @@ public class RayCastController : MonoBehaviour
     {
         actionMode = actionModes.bigMarket;
     }
+
+    #endregion
+
+    #endregion
 
 }
